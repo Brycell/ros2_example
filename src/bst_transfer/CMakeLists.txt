@@ -20,10 +20,16 @@ find_package(cv_bridge REQUIRED)
 include_directories(
   include
   ${OpenCV_INCLUDE_DIRS}
+  /usr/include/pcl-1.10/
+  /usr/include/eigen3/
 )
 
 add_executable(std_img_talker src/pub_image.cpp)
 ament_target_dependencies(std_img_talker rclcpp std_msgs sensor_msgs cv_bridge)
+#target_link_libraries(std_msg_talker -lstdc++)
+
+add_executable(std_pointcloud2_talker src/pub_point_cloud.cpp)
+ament_target_dependencies(std_pointcloud2_talker rclcpp std_msgs sensor_msgs cv_bridge)
 #target_link_libraries(std_msg_talker -lstdc++)
 
 
@@ -36,9 +42,12 @@ std_img_talker
   DESTINATION lib/${PROJECT_NAME})
 
 install(TARGETS
-std_img_listener
+std_pointcloud2_talker
   DESTINATION lib/${PROJECT_NAME})
 
+install(TARGETS
+std_img_listener
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
 

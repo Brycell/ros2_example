@@ -49,11 +49,11 @@ static void LoadImageNames(std::string const &filename,
 }
 
 
-class MinimalPublisher : public rclcpp::Node {
+class ImagePublisher : public rclcpp::Node {
 public:
-  MinimalPublisher(const std::string & topic_name): Node("minimal_publisher"), count_(0) {
+  ImagePublisher(const std::string & topic_name): Node("image_publisher"), count_(0) {
     publisher_ = this->create_publisher<sensor_msgs::msg::Image>(topic_name, 10);
-    timer_ = this->create_wall_timer(40ms, std::bind(&MinimalPublisher::timer_callback, this));
+    timer_ = this->create_wall_timer(40ms, std::bind(&ImagePublisher::timer_callback, this));
     LoadImageNames(ws_name_+"/left_images_list.txt", left_names_);
     img_num = left_names_.size();
   }
@@ -68,21 +68,20 @@ private:
     }
     // std::cout<<ws_name_+"/"+left_name<<std::endl;
     RCLCPP_INFO(this->get_logger(), "'%s'/%s'", ws_name_.c_str(), left_name.c_str());
-    cv::Mat left_img = cv::imread(ws_name_+"/"+left_name);
+    cv::Mat left_img = cv::imread(ws_name_+"/"+left_name, cv::IMREAD_GRAYSCALE);
+    left_img = left_img(cv::Rect(0, 0, 1920, 1200));
     // std::cout<<"left_img cols:"<<left_img.cols<<" left_img rows:"<<left_img.rows<<" left_img channels:"<<left_img.channels()<<std::endl;
     // RCLCPP_INFO(this->get_logger(), "left_img cols:'%s' left_img rows:'%s' left_img channels:'%s'", 
     //             std::string(left_img.cols).c_str(), std::string(left_img.rows).c_str(), std::string(left_img.channels()).c_str());
     cv_bridge::CvImage cvi_rgb;
     cvi_rgb.header.stamp = this->get_clock()->now();
-    cvi_rgb.header.frame_id = "dabai_rgb";
-    cvi_rgb.encoding = "bgr8";
+    cvi_rgb.header.frame_id = "left_image";
+    // cvi_rgb.encoding = "bgr8";
+    cvi_rgb.encoding = "8UC1";
     cvi_rgb.image = left_img;
     sensor_msgs::msg::Image im_rgb;
     cvi_rgb.toImageMsg(im_rgb);
 
-    // auto message = std_msgs::msg::String();
-    // message.data = "Hello, world! " + std::to_string(count_++);
-    // RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
     publisher_->publish(im_rgb);
   }
   rclcpp::TimerBase::SharedPtr timer_;
@@ -95,7 +94,7 @@ private:
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
   auto topic_name = std::string(argv[1]);
-  rclcpp::spin(std::make_shared<MinimalPublisher>(topic_name));
+  rclcpp::spin(std::make_shared<ImagePublisher>(topic_name));
   rclcpp::shutdown();
   return 0;
 }
