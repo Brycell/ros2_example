@@ -57,7 +57,7 @@ class PointCloud2Publisher : public rclcpp::Node {
 public:
   PointCloud2Publisher(const std::string & topic_name): Node("pointcloud2_publisher"), count_(0) {
     publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(topic_name, 10);
-    timer_ = this->create_wall_timer(1000ms, std::bind(&PointCloud2Publisher::timer_callback, this));
+    timer_ = this->create_wall_timer(40ms, std::bind(&PointCloud2Publisher::timer_callback, this));
     LoadImageNames(ws_name_+"/disp_images_list.txt", disp_names_);
     img_num = disp_names_.size();
   }
@@ -76,37 +76,72 @@ private:
     // left_img = left_img(cv::Rect(0, 0, 1920, 1200));
     // std::cout<<"disp_img cols:"<<disp_img.cols<<" disp_img rows:"<<disp_img.rows<<" disp_img channels:"<<disp_img.channels()<<std::endl;
     
+    int max_disp = 64;
+    int min_disp = 0;
+    int disp_range = max_disp - min_disp;
+    float dr,db,dg,v;
     sensor_msgs::msg::PointCloud2 output_msg;
     pcl::PointCloud<pcl::PointXYZRGB> cloud;
     int num_points = disp_img.rows * disp_img.cols;
     cloud.points.resize(num_points);
     for (int i = 0; i < disp_img.rows; i++) {
       for (int j = 0; j< disp_img.cols; j++) {
-        float disp = (float)disp_img.at<short>(i,j);
+        float disp = (float)disp_img.at<short>(i,j) /32;
         int index = disp_img.cols * i + j;
-
-        if (fabs(disp) < 3) {
+        
+        if (fabs(disp) < 0.1) {
             cloud.points[index].x = 10000000.f;
             cloud.points[index].y = 10000000.f;
             cloud.points[index].z = 10000000.f;
         } else {
             cloud.points[index].x = (float)((160 * (j - 960))/disp)/1000;//depth * tx/1000;
             cloud.points[index].y = (float)((160 * (i - 600))/disp)/1000;//depth * ty/1000;
-            cloud.points[index].z = (float)(320/disp)/1000;//depth/1000;
+            cloud.points[index].z = (float)(320/disp);//depth/1000;
+            // std::cout<<cloud.points[index].x << " " << cloud.points[index].y <<" " <<cloud.points[index].z<<std::endl;
         }
 
-        cloud.points[index].r = 0;
-        cloud.points[index].g = 255;
-        cloud.points[index].b = 0;
+        if (disp > max_disp) {
+          v = 1.0;
+        } else {
+          v = (disp*1.f - min_disp) / disp_range;
+        }
+            
+        if (v < 0.1242f) {
+          dr = 0.f;
+          db = 0.504f + ((1.f - 0.504f) / 0.1242f) * v;
+          dg = 0.f;
+        } else if (v <0.3747f) {
+          dr = 0.f;
+          dg = (v - 0.1242f) * (1.f / (0.3747f - 0.1242f));
+          db = 1.f;
+        } else if (v < 0.6253f) {
+          dr = (v - 0.3747f) * (1.f / (0.6253f -0.3747f));
+          dg = 1.f;
+          db = (0.6253 - v) * (1.f / (0.6253f -0.3747f));
+        } else if (v < 0.8758f) {
+          dr = 1.f;
+          dg = (0.8758f - v) * (1.f / (0.8758f - 0.6253f));
+          db = 0.f;
+        } else {
+          dr = 1.f - (v - 0.8758f) * ((1.f - 0.504f) / (1.f - 0.8758f));
+          dg = 0.f;
+          db = 0.f;
+        }
+
+
+        cloud.points[index].r = dr *255;
+        cloud.points[index].g = dg *255;
+        cloud.points[index].b = db *255;
                 
       }
     }
+    // std::cout<<max_disp<<" "<<min_disp<<std::endl;
  
     //将pcl点云转换到ros消息对象
     pcl::toROSMsg(cloud, output_msg);
     
     // 发布的点云坐标系
-    output_msg.header.frame_id="dabai_points";
+    output_msg.header.frame_id="mpv";
     output_msg.header.stamp = this->get_clock()->now();
     publisher_->publish(output_msg);
   }
